@@ -24,28 +24,33 @@ interface UpdatePayload {
   changes: { [key: string]: unknown };
 }
 
-export default function Home() {
-  // --- STATE MANAGEMENT ---
-  const [session, setSession] = useState<Session | null>(null);
-  const [appIsLoading, setAppIsLoading] = useState(true);
-  const [tableData, setTableData] = useState<TableDataState>([]);
-  const [originalTableData, setOriginalTableData] = useState<Record<string, unknown>[]>([]);
-  const [columns, setColumns] = useState<string[]>([]);
-  const [primaryKey] = useState<string>('Item_Code');
-  const [currentSchema] = useState('');
-  const [currentTable] = useState('');
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [aggregates] = useState<{ total_le: number; total_euro: number }>({ total_le: 0, total_euro: 0 });
-  const [pagination, setPagination] = useState({ currentPage: 1, totalRows: 0, rowsPerPage: 50 });
-  const [undoStack, setUndoStack] = useState<TableDataState[]>([]);
-  const [redoStack, setRedoStack] = useState<TableDataState[]>([]);
+interface SortConfig {
+    column: string;
+    direction: 'asc' | 'desc';
+}
 
-  // --- NEW: Add state for sorting ---
-  type SortDirection = 'asc' | 'desc';
-  type SortConfig = { column: string; direction: SortDirection };
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: 'Item_Code', direction: 'asc' });
-  type FilterMap = Record<string, string>;
-  const [filters, setFilters] = useState<FilterMap>({});
+export default function Home() {
+// REPLACEMENT for the state management block
+
+// --- STATE MANAGEMENT ---
+const [session, setSession] = useState<Session | null>(null);
+const [appIsLoading, setAppIsLoading] = useState(true);
+
+const [tableData, setTableData] = useState<TableDataState>([]);
+const [originalTableData, setOriginalTableData] = useState<TableDataState>([]);
+const [columns, setColumns] = useState<string[]>([]);
+const [primaryKey, setPrimaryKey] = useState<string>('Item_Code');
+const [currentSchema, setCurrentSchema] = useState('');
+const [currentTable, setCurrentTable] = useState('');
+const [isLoadingData, setIsLoadingData] = useState(false);
+const [aggregates, setAggregates] = useState({ total_le: 0, total_euro: 0 });
+const [pagination, setPagination] = useState({ currentPage: 1, totalRows: 0, rowsPerPage: 50 });
+
+const [undoStack, setUndoStack] = useState<TableDataState[]>([]);
+const [redoStack, setRedoStack] = useState<TableDataState[]>([]);
+
+const [sortConfig, setSortConfig] = useState<SortConfig>({ column: 'Item_Code', direction: 'asc' });
+const [filters, setFilters] = useState<{ [key: string]: string }>({});
   
   // --- AUTHENTICATION & SESSION ---
   useEffect(() => {
@@ -68,33 +73,52 @@ export default function Home() {
 
   
   // --- DATA & ACTION HANDLERS ---
-  const loadTableData = useCallback(async () => {
+// REPLACEMENT for the loadTableData function
+
+const loadTableData = useCallback(async () => {
+    // This function now reads its parameters from state, so it takes no arguments.
     if (!currentSchema || !currentTable) return;
     setIsLoadingData(true);
-    setUndoStack([]);
-    setRedoStack([]);
 
-    try {
-      const filterQuery = encodeURIComponent(JSON.stringify(filters));
-      const url = `/api/data/${currentSchema}/${currentTable}?page=${pagination.currentPage}&limit=${pagination.rowsPerPage}&sortBy=${sortConfig.column}&sortOrder=${sortConfig.direction}&filters=${filterQuery}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch data');
-      const result = await response.json();
-      
-      const loadedData = (result.data || []).map((row: Record<string, unknown>) => ({ ...row, _isSelected: false }));
-      const firstRow = loadedData[0] || {};
-      const columnKeys = Object.keys(firstRow).filter(key => !key.startsWith('_'));
-      
-      setColumns(columnKeys);
-      setTableData(loadedData);
-      setOriginalTableData(JSON.parse(JSON.stringify(loadedData)));
-      setPagination(prev => ({ ...prev, totalRows: result.total_rows || 0, currentPage: result.page_number || 1 }));
-    } catch (error) {
-      console.error("Failed to load table data:", error);
-    } finally {
-      setIsLoadingData(false);
+try {
+    const filterQuery = encodeURIComponent(JSON.stringify(filters));
+    const dataUrl = `/api/data/${currentSchema}/${currentTable}?page=${pagination.currentPage}&limit=${pagination.rowsPerPage}&sortBy=${sortConfig.column}&sortOrder=${sortConfig.direction}&filters=${filterQuery}`;
+    const aggregatesUrl = `/api/aggregates/${currentSchema}/${currentTable}`;
+
+    // Use Promise.all to make both network requests concurrently for better performance.
+    const [dataResponse, aggregatesResponse] = await Promise.all([
+        fetch(dataUrl),
+        fetch(aggregatesUrl)
+    ]);
+
+    // Check if both requests were successful.
+    if (!dataResponse.ok) throw new Error('Failed to fetch table data');
+    if (!aggregatesResponse.ok) throw new Error('Failed to fetch table aggregates');
+
+    // Parse the JSON from both responses.
+    const dataResult = await dataResponse.json();
+    const aggregatesResult = await aggregatesResponse.json();
+    
+    // Now, update all the state variables with the new data.
+    const loadedData = (dataResult.data || []).map((row: TableRow) => ({ ...row, _isSelected: false }));
+    
+    if (loadedData.length > 0) {
+        setColumns(Object.keys(loadedData[0]).filter(key => !key.startsWith('_')));
+    } else {
+        setColumns([]);
     }
-  }, [currentSchema, currentTable, pagination.currentPage, pagination.rowsPerPage, sortConfig, filters]); // Add filters to dependency array
+    
+    setTableData(loadedData);
+    setOriginalTableData(JSON.parse(JSON.stringify(loadedData)));
+    setPagination(prev => ({ ...prev, totalRows: dataResult.total_rows || 0, currentPage: dataResult.page_number || 1 }));
+    setAggregates(aggregatesResult); // This will now update the footer totals.
+
+} catch (error) {
+        console.error("Failed to load table data:", error);
+    } finally {
+        setIsLoadingData(false);
+    }
+}, [currentSchema, currentTable, pagination.currentPage, pagination.rowsPerPage, sortConfig, filters]);
 
 
     useEffect(() => {
@@ -103,7 +127,21 @@ export default function Home() {
     loadTableData();
   }, [loadTableData]);
 
-  // --- NEW: Pagination Handler ---
+
+  // --- Handlers ---
+
+  // --- Table Select Handler ---
+    const handleTableSelect = (schemaName: string, tableName: string) => {
+    setUndoStack([]);
+    setRedoStack([]);
+    setFilters({});
+    setSortConfig({ column: 'Item_Code', direction: 'asc' });
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+    setCurrentSchema(schemaName);
+    setCurrentTable(tableName);
+  };
+
+  // --- Pagination Handler ---
   const handlePageChange = (newPage: number) => {
     const totalPages = Math.ceil(pagination.totalRows / pagination.rowsPerPage);
     // Add boundary checks
@@ -113,7 +151,7 @@ export default function Home() {
     }
   };
 
-    // --- NEW: Filter Handlers ---
+    // --- Filter Handlers ---
   const handleApplyFilters = (newFilters: { [key: string]: string }) => {
     // When applying filters, always reset to the first page
     setPagination(prev => ({ ...prev, currentPage: 1 }));
@@ -126,7 +164,7 @@ export default function Home() {
   };
 
 
-    // --- NEW: Sorting Handler ---
+    // --- Sorting Handler ---
   const handleSort = (columnName: string) => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig.column === columnName && sortConfig.direction === 'asc') {
@@ -198,16 +236,21 @@ export default function Home() {
     setTableData(newData);
   };
 
-  const handleSaveChanges = async () => {
-    const newRows = tableData.filter(row => row._isNew);
+// REPLACEMENT for the handleSaveChanges function
+
+const handleSaveChanges = async () => {
+    // Define the type for the updates array to fix the TypeScript error
     const updates: UpdatePayload[] = [];
+    
     const changedRows = tableData.filter(row => 
         !row._isNew && 
         JSON.stringify(row) !== JSON.stringify(originalTableData.find(orig => orig[primaryKey] === row[primaryKey]))
     );
+    const newRows = tableData.filter(row => row._isNew);
+
     changedRows.forEach(row => {
         const originalRow = originalTableData.find(orig => orig[primaryKey] === row[primaryKey]);
-        const changes: { [key: string]: unknown } = {};
+        const changes: { [key: string]: any } = {};
         columns.forEach(col => {
             if (originalRow && row[col] !== originalRow[col]) {
                 changes[col] = row[col];
@@ -223,6 +266,7 @@ export default function Home() {
       return;
     }
 
+    // Use the state variables for schema, table, and PK, not hardcoded strings
     const payload = {
       schemaName: currentSchema,
       tableName: currentTable,
@@ -244,12 +288,12 @@ export default function Home() {
         throw new Error(err.error || "An unknown error occurred during save.");
       }
       alert("Changes saved successfully!");
+      // Call loadTableData with no arguments to reload the current view
       loadTableData();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      alert(`Save failed: ${errorMessage}`);
+    } catch (error: any) {
+      alert(`Save failed: ${error.message}`);
     }
-  };
+};
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -265,11 +309,14 @@ export default function Home() {
     return <LoginModal />;
   }
   
-  return (
+// REPLACEMENT for the final return block
+
+return (
     <div id="mainContainer" className="flex flex-col h-screen">
       <Header user={session.user} onLogout={handleLogout} />
       <main className="flex flex-grow overflow-hidden">
-        <Sidebar onTableLoad={loadTableData} />
+        {/* CORRECTED: Pass the correct handler function to the Sidebar */}
+        <Sidebar onTableLoad={handleTableSelect} />
         <div className="main-content-area flex-grow p-4 bg-white flex flex-col gap-4">
           <ActionBar 
             onSaveChanges={handleSaveChanges}
@@ -310,5 +357,5 @@ export default function Home() {
         </div>
       </main>
     </div>
-  );
+);
 }

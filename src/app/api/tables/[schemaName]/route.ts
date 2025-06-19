@@ -3,34 +3,29 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// This function handles GET requests to /api/tables/[schemaName]
+// The signature is simplified as we only need the params.
 export async function GET(
-  request: Request,
+  _request: Request, // Use underscore to indicate it's intentionally unused
   { params }: { params: { schemaName: string } }
 ) {
-  const schemaName = params.schemaName;
-
-  // We create a new, server-side Supabase client here.
-  // Note: For server-side use, you should use Service Role Key for elevated privileges
-  // if needed, but for now, we'll continue with the anon key.
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   try {
+    const schemaName = params.schemaName;
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     const { data, error } = await supabase.rpc('list_tables_by_pattern', {
       p_pattern: '%',
       p_schema_name: schemaName,
     });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     return NextResponse.json(data);
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
