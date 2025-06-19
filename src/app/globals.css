@@ -1,0 +1,494 @@
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #000000;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+style.css
+/* Custom styles for contenteditable cells and table appearance */
+[contenteditable]:focus {
+    outline: 2px solid #2563eb; /* Tailwind blue-600 */
+    background-color: #dbeafe; /* Tailwind blue-100 */
+}
+
+th, td {
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    text-align: left;
+    vertical-align: top;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+th.sortable-header {
+    cursor: pointer;
+    position: relative; /* Still needed for the resizer */
+}
+
+th.sortable-header:hover {
+    background-color: #f0f9ff; /* Tailwind sky-50 */
+}
+
+/* Add a ▼ arrow AFTER the text of a header with the 'sort-desc' class */
+th.sortable-header.sort-desc::after {
+    content: ' ▼';
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+/* Add a ▲ arrow AFTER the text of a header with the 'sort-asc' class */
+th.sortable-header.sort-asc::after {
+    content: ' ▲';
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sort-arrow {
+    margin-left: 5px;
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+
+/* Styles for the sort dropdown */
+.sort-dropdown {
+    position: absolute;
+    top: 100%; /* Position below the header */
+    left: 0;
+    min-width: 160px;
+    background-color: white;
+    border: 1px solid #e5e7eb; /* Tailwind gray-200 */
+    border-radius: 0.375rem; /* rounded-md */
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* shadow-lg */
+    z-index: 50; /* Make sure it's on top of table content */
+}
+
+.sort-dropdown-item {
+    padding: 0.5rem 1rem; /* 8px 16px */
+    font-size: 0.875rem; /* 14px */
+    cursor: pointer;
+}
+
+.sort-dropdown-item:hover {
+    background-color: #f3f4f6; /* Tailwind gray-100 */
+}
+
+/* Ensure the menu items are clearly interactive */
+.sort-dropdown div:hover {
+    background-color: #f3f4f6; /* Tailwind gray-100 */
+}
+
+/* Style for the settings modal to ensure it's on top */
+#settingsModal {
+    z-index: 1000; /* High z-index to appear above other elements */
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+}
+
+thead {
+    background-color: #f9fafb; /* Tailwind gray-50 */
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.readonly-cell {
+    background-color: #f3f4f6; /* Tailwind gray-100 */
+    color: #6b7280; /* Tailwind gray-500 */
+    font-style: italic;
+}
+
+/* Custom scrollbar for table container */
+.table-wrapper {
+    flex-grow: 1;
+    overflow: auto;
+    min-height: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+}
+
+.table-wrapper::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+    background: #c7c7c7;
+    border-radius: 10px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #a3a3a3;
+}
+
+/* Global cursor change when resizing */
+.table-wrapper.resizing-column {
+    cursor: col-resize;
+    user-select: none; /* Prevent text selection during drag */
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    font-family: 'Inter', sans-serif; /* Ensure Inter is used */
+    overflow: hidden;
+    color: var(--foreground); /* Ensure text color is applied globally */
+}
+
+.main-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+#appContent {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden; /* This container itself should not scroll; its children will. */
+    background-color: white;
+    padding: 1.5rem; /* p-6 */
+    border-radius: 0.75rem; /* rounded-xl */
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); /* shadow-2xl */
+}
+
+/* This section will contain the table and its controls */
+#dataGridSection {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-height: 0; /* Important for nested flex scrolling */
+}
+
+.column-filter-input {
+    width: 98%;
+    padding: 4px 6px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-sizing: border-box;
+    margin-top: 2px;
+    font-size: 0.875rem; /* Keep filter input font size consistent */
+}
+
+.zoom-button {
+    padding: 0.5rem 1rem; /* Slightly more padding */
+    font-size: 0.875rem;
+    border: none; /* Remove border */
+    border-radius: 0.5rem; /* More rounded */
+    background-color: #4f46e5; /* Indigo 600 */
+    color: white; /* White text */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    transition: all 0.2s ease-in-out;
+}
+
+.zoom-button:hover:not(:disabled) {
+    background-color: #4338ca; /* Indigo 700 on hover */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); /* Deeper shadow on hover */
+    transform: translateY(-1px); /* Slight lift effect */
+}
+
+.zoom-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #6366f1; /* Lighter indigo for disabled */
+}
+
+section.hidden { /* Utility class to hide sections */
+    display: none !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Column Resizer Styles */
+.resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 25; 
+}
+
+.resizer:hover {
+    background-color: rgba(0, 0, 0, 0.1); /* Light background on hover */
+}
+
+body.resizing-column, body.resizing-column * {
+    cursor: col-resize !important;
+    user-select: none;
+}
+
+#cloneSourceSection.hidden {
+    display: none;
+}
+
+/* --- Main Data Grid Container Styling --- */
+#table-content-wrapper {
+    border: 1px solid #e5e7eb; /* gray-200 */
+    border-radius: 0.5rem; /* rounded-lg, to match the main sections */
+    overflow: hidden; /* This is key to making the children's corners fit */
+}
+
+/* Remove individual borders from children to create a seamless container */
+.table-wrapper {
+    border: none;
+    border-radius: 0;
+}
+
+/* --- Pagination Controls --- */
+.pagination-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem; /* Reduced padding for a tighter look */
+    border-top: 1px solid #e5e7eb; /* A separator line from the table */
+    background-color: #f9fafb; /* gray-50 */
+    flex-shrink: 0;
+}
+
+.pagination-button {
+    padding: 0.5rem 1rem; /* Consistent padding with zoom button */
+    margin: 0 0.25rem;
+    background-color: #ffffff;
+    border: 1px solid #d1d5db; /* Keep border for pagination for distinction */
+    border-radius: 0.5rem; /* More rounded */
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    font-size: 0.875rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); /* Subtle shadow */
+}
+
+.pagination-button:hover:not(:disabled) {
+    background-color: #e0e7ff; /* Light blue on hover (Tailwind indigo-100) */
+    border-color: #a5b4fc; /* Tailwind indigo-300 */
+    transform: translateY(-1px);
+}
+
+.pagination-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f9fafb; /* Lighter background for disabled */
+}
+
+.page-display {
+    margin: 0 1rem;
+    font-size: 0.875rem; /* text-sm */
+    color: #4b5563; /* Tailwind gray-600 */
+    font-weight: 500;
+}
+
+.page-input { /* A dedicated class for the page number input */
+    width: 4rem; /* 64px */
+    text-align: center;
+    font-size: 0.875rem;
+    padding: 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    margin: 0 0.5rem;
+}
+
+.rows-per-page-selector {
+    padding: 0.4rem; /* Adjusted to match button height */
+    font-size: 0.875rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background-color: #ffffff;
+}
+
+/* A new class for all text in the footer */
+.footer-control-text {
+    font-size: 0.875rem; /* 14px */
+    color: #4b5563; /* gray-600 */
+    font-weight: 500;
+}
+
+/* --- Notification Toast Styles --- */
+.notification-toast {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem; /* Adds space between the message and the button */
+}
+
+.notification-close-btn {
+    background: transparent;
+    border: none;
+    color: inherit; /* Inherits color from parent (e.g., red-700 for errors) */
+    font-size: 1.5rem; /* Makes the 'x' larger */
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.7;
+    padding: 0 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.notification-close-btn:hover {
+    opacity: 1;
+    background-color: rgba(0,0,0,0.1);
+}
+
+
+/* --- Loading Overlay Spinner --- */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 45; /* Below modals but above content */
+    border-radius: 0.375rem; /* rounded-md */
+}
+
+.spinner {
+    border: 5px solid #f3f4f6; /* gray-100 */
+    border-top: 5px solid #3b82f6; /* blue-500 */
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- Manage Columns & Dashboard Modals --- */
+.modal-body {
+    padding: 1rem 1.5rem;
+}
+
+.column-checklist {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    background-color: #f9fafb;
+}
+
+.column-checklist-item {
+    display: block;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.column-checklist-item:hover {
+    background-color: #f3f4f6;
+}
+
+.column-checklist-item label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.column-checklist-item input {
+    margin-right: 0.75rem;
+    height: 1rem;
+    width: 1rem;
+}
+
+/* --- Sticky Columns for Table --- */
+.sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 15; /* Above other cells but below header resizer */
+    background-color: #f9fafb; /* Ensure background to hide content behind */
+}
+
+.readonly-cell.sticky-col {
+    background-color: #f0f1f3; /* A slightly different shade for sticky locked cells */
+}
+
+/* --- Custom SQL Text Area --- */
+#customSqlInput {
+    background-color: #f8fafc; /* slate-50 */
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* --- Results Panel --- */
+#sqlResultsContainer {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #1e293b; /* slate-800 */
+    color: #94a3b8; /* slate-400 */
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    color: #cbd5e1; /* slate-300 */
+}
+
+.results-table th,
+.results-table td {
+    border: 1px solid #334155; /* slate-700 */
+    padding: 0.5rem;
+    text-align: left;
+    white-space: pre; /* Preserve whitespace in results */
+}
+
+.results-table th {
+    background-color: #334155; /* slate-700 */
+    font-weight: bold;
+    color: #f1f5f9; /* slate-100 */
+}
+
+.row-error td {
+    background-color: #fee2e2; /* A light red color (Tailwind's red-100) */
+}
+.row-error:hover td {
+    background-color: #fecaca; /* A slightly darker red on hover (Tailwind's red-200) */
+}
