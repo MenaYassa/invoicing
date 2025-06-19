@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -14,7 +14,9 @@ import TableFooter from "@/components/datagrid/TableFooter";
 import LoginModal from '@/components/auth/LoginModal';
 
 // Define the structure of our state history snapshots
-type TableDataState = Record<string, unknown>[];
+type TableRow = Record<string, string | number | boolean | null>;
+type TableDataState = TableRow[];
+
 
 // Define the shape of objects for the update payload
 interface UpdatePayload {
@@ -30,14 +32,21 @@ export default function Home() {
   const [originalTableData, setOriginalTableData] = useState<Record<string, unknown>[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [primaryKey] = useState<string>('Item_Code');
-  const [currentSchema, setCurrentSchema] = useState('');
-  const [currentTable, setCurrentTable] = useState('');
+  const [currentSchema] = useState('');
+  const [currentTable] = useState('');
   const [isLoadingData, setIsLoadingData] = useState(false);
-  const [aggregates] = useState({ total_le: 0, total_euro: 0 });
+  const [aggregates] = useState<{ total_le: number; total_euro: number }>({ total_le: 0, total_euro: 0 });
   const [pagination, setPagination] = useState({ currentPage: 1, totalRows: 0, rowsPerPage: 50 });
   const [undoStack, setUndoStack] = useState<TableDataState[]>([]);
   const [redoStack, setRedoStack] = useState<TableDataState[]>([]);
 
+  // --- NEW: Add state for sorting ---
+  type SortDirection = 'asc' | 'desc';
+  type SortConfig = { column: string; direction: SortDirection };
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: 'Item_Code', direction: 'asc' });
+  type FilterMap = Record<string, string>;
+  const [filters, setFilters] = useState<FilterMap>({});
+  
   // --- AUTHENTICATION & SESSION ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -56,17 +65,19 @@ export default function Home() {
     return JSON.stringify(tableData) !== JSON.stringify(originalTableData);
   };
   
+
+  
   // --- DATA & ACTION HANDLERS ---
-  const loadTableData = async (schemaName: string, tableName: string) => {
-    if (!schemaName || !tableName) return;
+  const loadTableData = useCallback(async () => {
+    if (!currentSchema || !currentTable) return;
     setIsLoadingData(true);
     setUndoStack([]);
     setRedoStack([]);
-    setCurrentSchema(schemaName);
-    setCurrentTable(tableName);
 
     try {
-      const response = await fetch(`/api/data/${schemaName}/${tableName}?page=${pagination.currentPage}&limit=${pagination.rowsPerPage}`);
+      const filterQuery = encodeURIComponent(JSON.stringify(filters));
+      const url = `/api/data/${currentSchema}/${currentTable}?page=${pagination.currentPage}&limit=${pagination.rowsPerPage}&sortBy=${sortConfig.column}&sortOrder=${sortConfig.direction}&filters=${filterQuery}`;
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch data');
       const result = await response.json();
       
@@ -83,7 +94,47 @@ export default function Home() {
     } finally {
       setIsLoadingData(false);
     }
+  }, [currentSchema, currentTable, pagination.currentPage, pagination.rowsPerPage, sortConfig, filters]); // Add filters to dependency array
+
+
+    useEffect(() => {
+    // This effect runs whenever loadTableData is called (e.g., from the sidebar)
+    // or when its dependencies (like sortConfig) change.
+    loadTableData();
+  }, [loadTableData]);
+
+  // --- NEW: Pagination Handler ---
+  const handlePageChange = (newPage: number) => {
+    const totalPages = Math.ceil(pagination.totalRows / pagination.rowsPerPage);
+    // Add boundary checks
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPagination(prev => ({ ...prev, currentPage: newPage }));
+      // The useEffect hook will automatically re-fetch the data for the new page
+    }
   };
+
+    // --- NEW: Filter Handlers ---
+  const handleApplyFilters = (newFilters: { [key: string]: string }) => {
+    // When applying filters, always reset to the first page
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+    setFilters(newFilters);
+  };
+
+  const handleResetFilters = () => {
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+    setFilters({});
+  };
+
+
+    // --- NEW: Sorting Handler ---
+  const handleSort = (columnName: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.column === columnName && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ column: columnName, direction: direction });
+  };
+
 
   const saveStateForUndo = () => {
     const newUndoStack = [...undoStack, JSON.parse(JSON.stringify(tableData))];
@@ -92,12 +143,32 @@ export default function Home() {
     setRedoStack([]);
   };
 
-  const handleUndo = () => { /* ... (Your existing Undo logic) ... */ };
-  const handleRedo = () => { /* ... (Your existing Redo logic) ... */ };
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const newUndoStack = [...undoStack];
+    const lastState = newUndoStack.pop();
+    
+    if (lastState) {
+      setRedoStack([...redoStack, JSON.parse(JSON.stringify(tableData))]);
+      setTableData(lastState);
+      setUndoStack(newUndoStack);
+    }
+  };
+    const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const newRedoStack = [...redoStack];
+    const nextState = newRedoStack.pop();
+
+    if (nextState) {
+      setUndoStack([...undoStack, JSON.parse(JSON.stringify(tableData))]);
+      setTableData(nextState);
+      setRedoStack(newRedoStack);
+    }
+  };
 
   const handleAddNewRow = () => {
     saveStateForUndo();
-    const newRow: { [key: string]: unknown } = { _isNew: true, _tempId: `new_${Date.now()}`, _isSelected: false };
+    const newRow: TableRow = { _isNew: true, _tempId: `new_${Date.now()}`, _isSelected: false };
     columns.forEach(colName => {
       if (!newRow[colName]) newRow[colName] = null;
     });
@@ -121,7 +192,8 @@ export default function Home() {
       const parsedNum = parseFloat(String(newValue).replace(/,/g, ''));
       finalValue = isNaN(parsedNum) ? null : parsedNum;
     }
-    newRow[columnName] = finalValue;
+    
+    newRow[columnName] = finalValue as string | number | boolean | null;
     newData[rowIndex] = newRow;
     setTableData(newData);
   };
@@ -172,7 +244,7 @@ export default function Home() {
         throw new Error(err.error || "An unknown error occurred during save.");
       }
       alert("Changes saved successfully!");
-      loadTableData(currentSchema, currentTable);
+      loadTableData();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       alert(`Save failed: ${errorMessage}`);
@@ -216,6 +288,10 @@ export default function Home() {
                 <TableGrid 
                   columns={columns} 
                   data={tableData}
+                  onSort={handleSort}
+                  sortConfig={sortConfig}
+                  onApplyFilters={handleApplyFilters}
+                  onResetFilters={handleResetFilters}
                   onCellEdit={handleCellEdit}
                   lockedColumns={['Monthly_Qty', 'Total_Price_LE', 'Total_Price_Euro']}
                   primaryKeyColumns={[primaryKey]}
@@ -226,6 +302,7 @@ export default function Home() {
                   currentPage={pagination.currentPage}
                   rowsPerPage={pagination.rowsPerPage}
                   totalRows={pagination.totalRows}
+                  onPageChange={handlePageChange}
                 />
               </>
             )}

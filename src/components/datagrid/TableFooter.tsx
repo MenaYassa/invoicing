@@ -10,15 +10,10 @@ interface TableFooterProps {
   currentPage: number;
   rowsPerPage: number;
   totalRows: number;
+  onPageChange: (newPage: number) => void;
 }
 
-export default function TableFooter({
-  totalLE,
-  totalEuro,
-  currentPage,
-  rowsPerPage,
-  totalRows,
-}: TableFooterProps) {
+export default function TableFooter({ totalLE, totalEuro, currentPage, totalRows, rowsPerPage, onPageChange }: TableFooterProps) {
   return (
     <div
       id="dataGridFooter"
@@ -27,8 +22,9 @@ export default function TableFooter({
       <TableSummation totalLE={totalLE} totalEuro={totalEuro} />
       <Pagination
         currentPage={currentPage}
-        rowsPerPage={rowsPerPage}
         totalRows={totalRows}
+        rowsPerPage={rowsPerPage}
+        onPageChange={onPageChange}
       />
       <Zoom />
       {/* We can add the Zoom component here later if we decide to separate it */}
