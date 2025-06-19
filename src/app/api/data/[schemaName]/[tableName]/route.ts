@@ -48,9 +48,10 @@ export async function GET(
     // 5. Return the data successfully as JSON
     return NextResponse.json(data);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('API Route Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     // Return a standard error response if anything goes wrong
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

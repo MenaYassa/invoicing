@@ -40,8 +40,9 @@ export default function Sidebar({ onTableLoad }: SidebarProps) {
         if (!response.ok) throw new Error('Failed to fetch tables.');
         const data: Table[] = await response.json();
         setTables(data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+        setError(errorMessage);
         setTables([]);
       } finally {
         setIsLoading(false);

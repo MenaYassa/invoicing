@@ -1,14 +1,12 @@
 // File: components/datagrid/TableGrid.tsx
 
-import FilterRow from './FilterRow';
-
 // Component now accepts real data
 interface TableGridProps {
   columns: string[];
-  data: any[];
+  data: Record<string, unknown>[];
   lockedColumns: string[]; // To know which cells to make read-only
   primaryKeyColumns: string[];
-  onCellEdit: (rowIndex: number, columnId: string, value: any) => void;
+  onCellEdit: (rowIndex: number, columnId: string, value: unknown) => void;
 }
 
 export default function TableGrid({ columns, data, lockedColumns, primaryKeyColumns, onCellEdit }: TableGridProps) {
@@ -16,7 +14,9 @@ export default function TableGrid({ columns, data, lockedColumns, primaryKeyColu
   const handleCellBlur = (event: React.FocusEvent<HTMLTableCellElement>, rowIndex: number, columnId: string) => {
     // When a cell loses focus, call the onCellEdit function passed from the parent
     onCellEdit(rowIndex, columnId, event.currentTarget.textContent);
-  };  if (columns.length === 0) {
+  };  
+  
+  if (columns.length === 0) {
     return (
       <div className="flex-grow flex items-center justify-center text-slate-500">
         <p>Select and load a table to view data.</p>
@@ -39,7 +39,7 @@ export default function TableGrid({ columns, data, lockedColumns, primaryKeyColu
         <tbody>
           {data.length > 0 ? (
             data.map((row, rowIndex) => (
-              <tr key={row[primaryKeyColumns[0]] || row._tempId} className={row._isNew ? 'bg-green-50' : ''}>
+              <tr key={String(row[primaryKeyColumns[0]]) || String(row._tempId)} className={row._isNew ? 'bg-green-50' : ''}>
                 {columns.map((colName) => {
                   const isLocked = lockedColumns.includes(colName);
                   const isPK = primaryKeyColumns.includes(colName);

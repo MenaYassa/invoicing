@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
 import Header from "@/components/layout/Header";
@@ -14,12 +14,12 @@ import TableFooter from "@/components/datagrid/TableFooter";
 import LoginModal from '@/components/auth/LoginModal';
 
 // Define the structure of our state history snapshots
-type TableDataState = any[];
+type TableDataState = Record<string, unknown>[];
 
 // Define the shape of objects for the update payload
 interface UpdatePayload {
   pkValue: string;
-  changes: { [key: string]: any };
+  changes: { [key: string]: unknown };
 }
 
 export default function Home() {
@@ -27,13 +27,13 @@ export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [appIsLoading, setAppIsLoading] = useState(true);
   const [tableData, setTableData] = useState<TableDataState>([]);
-  const [originalTableData, setOriginalTableData] = useState<any[]>([]);
+  const [originalTableData, setOriginalTableData] = useState<Record<string, unknown>[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
-  const [primaryKey, setPrimaryKey] = useState<string>('Item_Code');
+  const [primaryKey] = useState<string>('Item_Code');
   const [currentSchema, setCurrentSchema] = useState('');
   const [currentTable, setCurrentTable] = useState('');
   const [isLoadingData, setIsLoadingData] = useState(false);
-  const [aggregates, setAggregates] = useState({ total_le: 0, total_euro: 0 });
+  const [aggregates] = useState({ total_le: 0, total_euro: 0 });
   const [pagination, setPagination] = useState({ currentPage: 1, totalRows: 0, rowsPerPage: 50 });
   const [undoStack, setUndoStack] = useState<TableDataState[]>([]);
   const [redoStack, setRedoStack] = useState<TableDataState[]>([]);
@@ -70,7 +70,7 @@ export default function Home() {
       if (!response.ok) throw new Error('Failed to fetch data');
       const result = await response.json();
       
-      const loadedData = (result.data || []).map((row: any) => ({ ...row, _isSelected: false }));
+      const loadedData = (result.data || []).map((row: Record<string, unknown>) => ({ ...row, _isSelected: false }));
       const firstRow = loadedData[0] || {};
       const columnKeys = Object.keys(firstRow).filter(key => !key.startsWith('_'));
       
@@ -97,14 +97,14 @@ export default function Home() {
 
   const handleAddNewRow = () => {
     saveStateForUndo();
-    const newRow: { [key: string]: any } = { _isNew: true, _tempId: `new_${Date.now()}`, _isSelected: false };
+    const newRow: { [key: string]: unknown } = { _isNew: true, _tempId: `new_${Date.now()}`, _isSelected: false };
     columns.forEach(colName => {
       if (!newRow[colName]) newRow[colName] = null;
     });
     setTableData(prevData => [...prevData, newRow]);
   };
 
-  const handleCellEdit = (rowIndex: number, columnName: string, newValue: any) => {
+  const handleCellEdit = (rowIndex: number, columnName: string, newValue: unknown) => {
     const originalValue = tableData[rowIndex][columnName];
     const numericColumns = ["BOQ_Qty", "Unit_Price_LE", "Unit_Price_Euro", "Previous_Qty", "Cumulative_Qty"];
     let valueForComparison = newValue;
@@ -135,14 +135,14 @@ export default function Home() {
     );
     changedRows.forEach(row => {
         const originalRow = originalTableData.find(orig => orig[primaryKey] === row[primaryKey]);
-        const changes: { [key: string]: any } = {};
+        const changes: { [key: string]: unknown } = {};
         columns.forEach(col => {
-            if (row[col] !== originalRow[col]) {
+            if (originalRow && row[col] !== originalRow[col]) {
                 changes[col] = row[col];
             }
         });
         if(Object.keys(changes).length > 0) {
-            updates.push({ pkValue: row[primaryKey], changes: changes });
+            updates.push({ pkValue: String(row[primaryKey]), changes: changes });
         }
     });
 
@@ -173,8 +173,9 @@ export default function Home() {
       }
       alert("Changes saved successfully!");
       loadTableData(currentSchema, currentTable);
-    } catch (error: any) {
-      alert(`Save failed: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      alert(`Save failed: ${errorMessage}`);
     }
   };
 
